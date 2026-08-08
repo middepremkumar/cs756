@@ -1,0 +1,10 @@
+# Existing ML pipeline dependencies
+pandas
+numpy
+scikit-learn
+joblib
+
+# Flask backend
+flask>=3.0
+flask-cors>=4.0
+marshmallow>=3.20

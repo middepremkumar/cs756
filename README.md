@@ -34,7 +34,7 @@ graph TD
 * **Outputs:** 
   - `inventory_data.csv`: Daily log of `[date, material_id, units_used, current_stock]`.
   - `material_metadata.json`: Key material invariants like lead time and base demand.
-* **Why this flow exists:** In manufacturing, demand is rarely stationary. It is subject to calendar seasonalities, promotional spikes (shocks), and logistics delays (disruptions). Simulating these challenges ensures that the downstream forecasting models and replenishment systems are robust against real-world volatility.
+* **Why this flow exists:** In manufacturing, demand is subject to seasonality, shocks (promotional spikes), and logistics disruptions (supply delays). Simulating these challenges ensures that the downstream forecasting models and replenishment systems are robust against real-world volatility.
 
 ---
 
@@ -82,41 +82,113 @@ graph TD
 
 ---
 
-## 🚀 How to Run the Pipeline
+## 🚀 How to Run the App & Backend Workflow
 
-Ensure you have the required dependencies installed:
+Ensure you have the dependencies installed:
 ```bash
-pip install pandas numpy scikit-learn joblib
+pip install -r requirements.txt
 ```
 
 ### Step 1: Generate Synthetic Material History
 Simulates 2 years of daily data for 15 raw materials, including custom shock events and delayed lead times:
 ```bash
-python generate_data.py
+python -m core.generate_data
 ```
 
 ### Step 2: Train Machine Learning Models
 Trains 15 independent `GradientBoostingRegressor` models, outputs test set MAE, and saves models to `/models/`:
 ```bash
-python baseline_model.py
+python -m core.baseline_model
 ```
 
-### Step 3: Run Procurement Pipeline & Dashboard
-Simulates a shortage (e.g. on `MAT_01`), runs recursive forecasts, applies inventory optimization formulas, and outputs a clean procurement alert table:
+### Step 3: Run the Backend Flask API Server
+Start the Flask REST API server to serve the API and the Swagger UI:
 ```bash
-python pipeline.py
+python app.py
 ```
+*The server will run on `http://127.0.0.1:5000`.*
+
+---
+
+## 📡 API Endpoints
+
+### 1. Interactive Dashboard (Web UI)
+* **Endpoint:** `GET /`
+* **Description:** Renders the Swagger UI API documentation and tester client.
+
+### 2. Health Check
+* **Endpoint:** `GET /api/health`
+* **Response:**
+  ```json
+  {"status": "ok", "timestamp": "2026-08-08T09:14:53.621588"}
+  ```
+
+### 3. Retrieve Materials Config & Logs
+* **Endpoint:** `GET /api/inventory/materials`
+* **Response (JSON list of material stats):**
+  ```json
+  [
+    {
+      "material_id": "MAT_01",
+      "current_stock": 3788,
+      "lead_time_days": 7,
+      "historical_usage_90": [292, 278, 172, ... (90 items)]
+    }
+  ]
+  ```
+
+### 4. Inventory Optimization Recommendation
+* **Endpoint:** `POST /api/inventory/optimize`
+* **Payload (JSON):**
+  ```json
+  {
+    "material_id": "MAT_01",
+    "current_stock": 379.0,
+    "lead_time_days": 7,
+    "historical_usage_90": [400.0, 410.0, 390.0, ... (90 daily floats)]
+  }
+  ```
+* **Response (JSON):**
+  ```json
+  {
+    "material_id": "MAT_01",
+    "current_stock": 379,
+    "safety_stock": 120,
+    "reorder_point": 2786,
+    "eoq": 2636,
+    "recommended_order_qty": 2636,
+    "stockout_risk": "HIGH",
+    "forecasted_usage": [372.88, 366.01, 391.8, 392.72, 387.07, 380.59, 375.04]
+  }
+  ```
 
 ---
 
 ## 📁 Repository Structure
 
 ```text
-├── generate_data.py     # Data simulation & metadata creation
-├── baseline_model.py    # Feature engineering & ML training script
-├── inventory_logic.py   # Math formulations (SS, ROP, EOQ, Risk)
-├── pipeline.py          # Pipeline runner & terminal dashboard
-├── inventory_data.csv   # Simulated daily usage & stock records
-├── material_metadata.json  # Raw material attributes (lead times, etc.)
-└── models/              # Saved GBDT models per material (*_baseline.pkl)
+├── app.py                  # Flask application entry point
+├── requirements.txt        # Python backend dependencies
+├── inventory_data.csv      # Simulated daily usage & stock records
+├── material_metadata.json     # Raw material attributes (lead times, etc.)
+├── models/                 # Saved GBDT models per material (*_baseline.pkl)
+├── templates/
+│   └── index.html          # Swagger UI HTML template
+├── api/
+│   ├── __init__.py
+│   ├── inventory.py        # API routes and blueprint handlers
+│   └── schemas.py          # Marshmallow request schemas
+└── core/
+    ├── __init__.py
+    ├── generate_data.py    # Data simulation & metadata creation
+    ├── baseline_model.py   # Feature engineering & ML training script
+    ├── inventory_logic.py  # Math formulations (SS, ROP, EOQ, Risk)
+    ├── pipeline.py         # Pipeline runner & terminal dashboard
+    └── test_interactive.py # Quick local intuition test runner
 ```
+
+---
+
+## ⚡ Backend Integration Guide
+
+For additional technical details on integrating the ML forecasting models and mathematical inventory logic into your web application backend, refer to the **[backend.md](file:///home/shaikafnan/cs756/backend.md)** document.
